@@ -18,6 +18,7 @@
  */
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
@@ -825,13 +826,52 @@ static char **prepend_options_from_env(int *p_argc, char **orig_argv)
 	return new_argv;
 }
 
+static int dirname_set_root_kversion(const char **dirname, const char *root,
+				     const char *kversion)
+{
+	char dirname_buf[PATH_MAX];
+	struct utsname u;
+	DIR *d;
+
+	if (root == NULL && kversion == NULL) {
+		*dirname = NULL;
+		return EXIT_SUCCESS;
+	}
+
+	if (root == NULL)
+		root = "";
+	if (kversion == NULL) {
+		if (uname(&u) < 0) {
+			ERR("uname() failed: %m\n");
+			return -1;
+		}
+		kversion = u.release;
+	}
+
+	snprintf(dirname_buf, sizeof(dirname_buf), "%s/run/modules/%s",
+		 root, kversion);
+	d = opendir(dirname_buf);
+	if (d) {
+		closedir(d);
+		goto out;
+	}
+
+	WRN("could not open directory %s: %m\n", dirname_buf);
+	WRN("using %s%s/%s\n", root, MODULE_DIRECTORY, kversion);
+
+	snprintf(dirname_buf, sizeof(dirname_buf), "%s" MODULE_DIRECTORY "/%s",
+		 root, kversion);
+out:
+	*dirname = dirname_buf;
+	return EXIT_SUCCESS;
+}
+
 static int do_modprobe(int argc, char **orig_argv)
 {
 	struct kmod_ctx *ctx;
 	char **args = NULL, **argv;
 	const char **config_paths = NULL;
 	int nargs = 0, n_config_paths = 0;
-	char dirname_buf[PATH_MAX];
 	const char *dirname = NULL;
 	const char *root = NULL;
 	const char *kversion = NULL;
@@ -986,23 +1026,9 @@ static int do_modprobe(int argc, char **orig_argv)
 		}
 	}
 
-	if (root != NULL || kversion != NULL) {
-		struct utsname u;
-		if (root == NULL)
-			root = "";
-		if (kversion == NULL) {
-			if (uname(&u) < 0) {
-				ERR("uname() failed: %m\n");
-				err = -1;
-				goto done;
-			}
-			kversion = u.release;
-		}
-		snprintf(dirname_buf, sizeof(dirname_buf),
-				"%s" MODULE_DIRECTORY "/%s", root,
-				kversion);
-		dirname = dirname_buf;
-	}
+	err = dirname_set_root_kversion(&dirname, root, kversion);
+	if (err != EXIT_SUCCESS)
+		goto done;
 
 	ctx = kmod_new(dirname, config_paths);
 	if (!ctx) {

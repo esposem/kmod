@@ -152,10 +152,37 @@ static void help(void)
 	}
 }
 
+static int check_devname_exists(FILE **in, char *release,
+				const char *modules_path)
+{
+	char modules[PATH_MAX];
+	*in = NULL;
+
+	snprintf(modules, sizeof(modules), "%s/%s/modules.devname", modules_path,
+		 release);
+	*in = fopen(modules, "re");
+	if (*in == NULL) {
+		if (errno == ENOENT) {
+			fprintf(stderr, "Warning: %s/%s/modules.devname not found - ignoring\n",
+				modules_path, release);
+			goto exit_success;
+		} else {
+			fprintf(stderr, "Error: could not open %s/%s/modules.devname - %m\n",
+				modules_path, release);
+			return EXIT_FAILURE;
+		}
+	}
+	fclose(*in);
+	*in = NULL;
+
+exit_success:
+	return EXIT_SUCCESS;
+}
+
 static int do_static_nodes(int argc, char *argv[])
 {
 	struct utsname kernel;
-	char modules[PATH_MAX], buf[4096];
+	char buf[4096];
 	const char *output = "/dev/stdout";
 	FILE *in = NULL, *out = NULL;
 	const struct static_nodes_format *format = &static_nodes_format_human;
@@ -212,19 +239,12 @@ static int do_static_nodes(int argc, char *argv[])
 		goto finish;
 	}
 
-	snprintf(modules, sizeof(modules), MODULE_DIRECTORY "/%s/modules.devname", kernel.release);
-	in = fopen(modules, "re");
-	if (in == NULL) {
-		if (errno == ENOENT) {
-			fprintf(stderr, "Warning: " MODULE_DIRECTORY "/%s/modules.devname not found - ignoring\n",
-				kernel.release);
-			ret = EXIT_SUCCESS;
-		} else {
-			fprintf(stderr, "Error: could not open " MODULE_DIRECTORY "/%s/modules.devname - %m\n",
-				kernel.release);
-			ret = EXIT_FAILURE;
-		}
-		goto finish;
+	ret = check_devname_exists(&in, kernel.release, "/run/modules");
+	if (ret != EXIT_SUCCESS || in == NULL) {
+		ret = check_devname_exists(&in, kernel.release,
+					   MODULE_DIRECTORY);
+		if (ret != EXIT_SUCCESS || in == NULL)
+			goto finish;
 	}
 
 	r = mkdir_parents(output, 0755);

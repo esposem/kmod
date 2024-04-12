@@ -2903,6 +2903,31 @@ static int is_version_number(const char *version)
 	return (sscanf(version, "%u.%u", &d1, &d2) == 2);
 }
 
+static size_t set_dirname_cfg(char *dirname, const char *kversion,
+			      const char *root)
+{
+	DIR *d;
+	size_t dirnamelen;
+
+	if (root == NULL)
+		root = "";
+
+	dirnamelen = snprintf(dirname, PATH_MAX, "%s/run/modules/%s", root,
+			      kversion);
+	d = opendir(dirname);
+	if (d) {
+		closedir(d);
+		return dirnamelen;
+	}
+
+	WRN("could not open directory %s: %m\n", dirname);
+	WRN("using %s%s/%s\n", root, MODULE_DIRECTORY, kversion);
+
+	return snprintf(dirname, PATH_MAX, "%s" MODULE_DIRECTORY "/%s", root,
+			kversion);
+
+}
+
 static int do_depmod(int argc, char *argv[])
 {
 	FILE *out = NULL;
@@ -3023,13 +3048,9 @@ static int do_depmod(int argc, char *argv[])
 		cfg.kversion = un.release;
 	}
 
-	cfg.dirnamelen = snprintf(cfg.dirname, PATH_MAX,
-				  "%s" MODULE_DIRECTORY "/%s",
-				  root ?: "", cfg.kversion);
-
-	cfg.outdirnamelen = snprintf(cfg.outdirname, PATH_MAX,
-				     "%s" MODULE_DIRECTORY "/%s",
-				     out_root ?: (root ?: ""), cfg.kversion);
+	cfg.dirnamelen = set_dirname_cfg(cfg.dirname, cfg.kversion, root);
+	cfg.outdirnamelen = set_dirname_cfg(cfg.outdirname, cfg.kversion,
+					    out_root ?: root);
 
 	if (optind == argc)
 		all = 1;

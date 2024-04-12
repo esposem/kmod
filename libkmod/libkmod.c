@@ -19,6 +19,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fnmatch.h>
 #include <limits.h>
@@ -210,12 +211,14 @@ static int log_priority(const char *priority)
 	return 0;
 }
 
-static const char *dirname_default_prefix = MODULE_DIRECTORY;
+static const char *dirname_default_prefix = "/run/modules";
+static const char *dirname_alternative_prefix = MODULE_DIRECTORY;
 
-static char *get_kernel_release(const char *dirname)
+static char *get_kernel_release(struct kmod_ctx *ctx, const char *dirname)
 {
 	struct utsname u;
 	char *p;
+	DIR *d;
 
 	if (dirname != NULL)
 		return path_make_absolute_cwd(dirname);
@@ -224,6 +227,19 @@ static char *get_kernel_release(const char *dirname)
 		return NULL;
 
 	if (asprintf(&p, "%s/%s", dirname_default_prefix, u.release) < 0)
+		return NULL;
+
+	d = opendir(p);
+	if (d) {
+		closedir(d);
+		return p;
+	}
+
+	NOTICE(ctx, "could not open directory %s: %m\n", p);
+	NOTICE(ctx, "using %s/%s\n", dirname_alternative_prefix, u.release);
+	free(p);
+
+	if (asprintf(&p, "%s/%s", dirname_alternative_prefix, u.release) < 0)
 		return NULL;
 
 	return p;
@@ -301,7 +317,7 @@ KMOD_EXPORT struct kmod_ctx *kmod_new(const char *dirname,
 	ctx->log_data = stderr;
 	ctx->log_priority = LOG_ERR;
 
-	ctx->dirname = get_kernel_release(dirname);
+	ctx->dirname = get_kernel_release(ctx, dirname);
 
 	/* environment overwrites config */
 	env = secure_getenv("KMOD_LOG");

@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
@@ -384,10 +385,49 @@ static bool is_module_filename(const char *name)
 	return false;
 }
 
+static int dirname_set_root_kversion(const char **dirname, const char *root,
+				     const char *kversion)
+{
+	char dirname_buf[PATH_MAX];
+	struct utsname u;
+	DIR *d;
+
+	if (root == NULL && kversion == NULL) {
+		*dirname = NULL;
+		return EXIT_SUCCESS;
+	}
+
+	if (root == NULL)
+		root = "";
+	if (kversion == NULL) {
+		if (uname(&u) < 0) {
+			ERR("uname() failed: %m\n");
+			return EXIT_FAILURE;
+		}
+		kversion = u.release;
+	}
+
+	snprintf(dirname_buf, sizeof(dirname_buf), "%s/run/modules/%s",
+		 root, kversion);
+	d = opendir(dirname_buf);
+	if (d) {
+		closedir(d);
+		goto out;
+	}
+
+	WRN("could not open directory %s: %m\n", dirname_buf);
+	WRN("using %s%s/%s\n", root, MODULE_DIRECTORY, kversion);
+
+	snprintf(dirname_buf, sizeof(dirname_buf), "%s" MODULE_DIRECTORY "/%s",
+		 root, kversion);
+out:
+	*dirname = dirname_buf;
+	return EXIT_SUCCESS;
+}
+
 static int do_modinfo(int argc, char *argv[])
 {
 	struct kmod_ctx *ctx;
-	char dirname_buf[PATH_MAX];
 	const char *dirname = NULL;
 	const char *kversion = NULL;
 	const char *root = NULL;
@@ -451,21 +491,9 @@ static int do_modinfo(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (root != NULL || kversion != NULL) {
-		struct utsname u;
-		if (root == NULL)
-			root = "";
-		if (kversion == NULL) {
-			if (uname(&u) < 0) {
-				ERR("uname() failed: %m\n");
-				return EXIT_FAILURE;
-			}
-			kversion = u.release;
-		}
-		snprintf(dirname_buf, sizeof(dirname_buf), "%s" MODULE_DIRECTORY "/%s",
-			 root, kversion);
-		dirname = dirname_buf;
-	}
+	err = dirname_set_root_kversion(&dirname, root, kversion);
+	if (err != EXIT_SUCCESS)
+		return err;
 
 	ctx = kmod_new(dirname, &null_config);
 	if (!ctx) {
