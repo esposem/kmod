@@ -168,8 +168,18 @@ static int do_insmod(int argc, char *argv[])
 	if (r < 0)
 		goto end;
 
+	/* Try first with MODULE_DIRECTORY */
 	r = get_module_dirname(dirname_buf, sizeof(dirname_buf),
 			       MODULE_DIRECTORY);
+	if (r)
+		goto end;
+	r = _do_insmod(dirname_buf, filename, flags, opts, verbose);
+	if (!r)
+		goto end;
+
+	/* If not found, look at MODULE_ALTERNATIVE_DIRECTORY */
+	r = get_module_dirname(dirname_buf, sizeof(dirname_buf),
+			       MODULE_ALTERNATIVE_DIRECTORY);
 	if (r)
 		goto end;
 	r = _do_insmod(dirname_buf, filename, flags, opts, verbose);
