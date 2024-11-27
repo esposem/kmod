@@ -974,8 +974,20 @@ static int do_modprobe(int argc, char **orig_argv)
 		kversion = u.release;
 	}
 
+	/* Try first with MODULE_DIRECTORY */
 	err = get_module_dirname(dirname_buf, sizeof(dirname_buf), root,
 				 MODULE_DIRECTORY, kversion);
+	if (err)
+		goto done;
+	err = _do_modprobe(dirname_buf, config_paths, args, nargs, do_show_config,
+			   do_show_modversions, do_show_exports, do_remove,
+			   use_all);
+	if (!err)
+		goto done;
+
+	/* If not found, look at MODULE_ALTERNATIVE_DIRECTORY */
+	err = get_module_dirname(dirname_buf, sizeof(dirname_buf), root,
+				 MODULE_ALTERNATIVE_DIRECTORY, kversion);
 	if (err)
 		goto done;
 	err = _do_modprobe(dirname_buf, config_paths, args, nargs, do_show_config,
