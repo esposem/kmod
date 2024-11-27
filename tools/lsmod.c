@@ -157,8 +157,18 @@ static int do_lsmod(int argc, char *argv[])
 		goto done;
 	}
 
+	/* Try first with MODULE_DIRECTORY */
 	r = get_module_dirname(dirname_buf, sizeof(dirname_buf),
 			       MODULE_DIRECTORY);
+	if (r)
+		goto done;
+	r = _do_lsmod(dirname_buf, verbose);
+	if (!r)
+		goto done;
+
+	/* If not found, look at MODULE_ALTERNATIVE_DIRECTORY */
+	r = get_module_dirname(dirname_buf, sizeof(dirname_buf),
+			       MODULE_ALTERNATIVE_DIRECTORY);
 	if (r)
 		goto done;
 	r = _do_lsmod(dirname_buf, verbose);
