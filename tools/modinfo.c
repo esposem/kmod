@@ -488,8 +488,18 @@ static int do_modinfo(int argc, char *argv[])
 		kversion = u.release;
 	}
 
+	/* Try first with MODULE_DIRECTORY */
 	err = get_module_dirname(dirname_buf, sizeof(dirname_buf), root,
 				 MODULE_DIRECTORY, kversion);
+	if (err)
+		return EXIT_FAILURE;
+	err = _do_modinfo(dirname_buf, argc, argv, arg_is_modname);
+	if (!err)
+		return EXIT_SUCCESS;
+
+	/* If not found, look at MODULE_ALTERNATIVE_DIRECTORY */
+	err = get_module_dirname(dirname_buf, sizeof(dirname_buf), root,
+				 MODULE_ALTERNATIVE_DIRECTORY, kversion);
 	if (err)
 		return EXIT_FAILURE;
 	err = _do_modinfo(dirname_buf, argc, argv, arg_is_modname);
