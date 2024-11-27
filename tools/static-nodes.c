@@ -277,12 +277,23 @@ static int do_static_nodes(int argc, char *argv[])
 		goto finish;
 	}
 
+	/* Try first with MODULE_DIRECTORY */
 	ret = get_module_dirname(modules, sizeof(modules), MODULE_DIRECTORY,
 				 kernel.release);
 	if (ret)
 		goto finish;
 	ret = _do_static_nodes(modules, MODULE_DIRECTORY, kernel.release,
 			       format, out);
+	if (!ret)
+		goto finish;
+
+	/* If not found, look at MODULE_ALTERNATIVE_DIRECTORY */
+	ret = get_module_dirname(modules, sizeof(modules),
+				 MODULE_ALTERNATIVE_DIRECTORY, kernel.release);
+	if (ret)
+		goto finish;
+	ret = _do_static_nodes(modules, MODULE_ALTERNATIVE_DIRECTORY,
+			       kernel.release, format, out);
 finish:
 	if (out)
 		fclose(out);
